@@ -30,6 +30,15 @@ Cohort: 507 primary tumors (POLE 79, MSI 124, CN-low 144, CN-high 160); 24,006 g
    Bonferroni), then a multivariable Cox model, PFI ~ subtype + age + FIGO stage, with the
    proportional-hazards assumption checked by scaled Schoenfeld residuals. PFI is the primary
    endpoint, as Liu et al. recommend for UCEC; OS is a secondary check.
+4. **Batch effects and confounding** (`05`): PCA of the 2,000 most variable genes, with the share
+   of each component explained by tissue source site (the contributing institution) versus MSI
+   status; a chi-square test of MSI prevalence across sites; and a mixed model,
+   expression ~ MSI + (1 | site), for MLH1 and the top DE genes, against ordinary least squares.
+5. **MSI classifier** (`06`): predict the clinical MSI assay call (MSI-H vs MSS, n = 321, a label
+   independent of the expression data) from RNA-seq. Four models from one gene to 3,000: MLH1 alone,
+   a 10-gene panel selected inside each training fold, elastic-net logistic regression with the
+   penalty tuned by nested CV, and a random forest. Repeated stratified 5-fold CV, then
+   leave-one-site-out so a model that had learned site signatures would fall apart.
 
 ## Results
 
@@ -57,6 +66,24 @@ age and stage (n = 503, 113 events, concordance 0.70), CN-high carries a hazard 
 
 ![km](figures/km_pfi_subtype.png)
 
+**Batch effects.** Tissue source site explains 14% of PC1, so the institution leaves a visible
+mark on expression. It is orthogonal to the biology of interest, though: MSI status explains none of
+PC1, MSI-H prevalence does not differ across the nine sites with ≥ 10 labeled tumors (24–44%,
+chi-square p = 0.71), and in the mixed model the between-site variance in MLH1 expression is under
+1% of the residual (ICC 0.008), leaving the MSI effect and its standard error unchanged to three
+decimals. The check is cheap, and here it says site would not bias the comparisons above.
+
+**Does machine learning add anything over one gene?** MLH1 alone calls MSI-H at AUROC 0.90 and
+balanced accuracy 0.89. The elastic net over 3,000 genes reaches AUROC 0.975 and balanced accuracy
+0.92, keeping 151 genes led by MLH1, EPM2AIP1 and RPL22L1 (higher in MSI-H, consistent with the
+RPL22 frameshift common in MSI tumors). The random forest (0.95) adds nothing over the linear model,
+and the 10-gene panel sits between. Held out one site at a time, the ranking is unchanged (elastic
+net 0.971, MLH1 0.892), so none of the models is reading site signatures. The judgment: a sparse
+linear model earns its extra 0.08 AUROC where the call matters; a single-gene rule gets 90% with
+nothing to tune, and a nonlinear model is not worth its opacity here.
+
+![roc](figures/roc_msi_classifier.png)
+
 ## Limitations
 
 - Subtype calls come from the TCGA consortium, not re-derived here; MSI status was called from
@@ -66,12 +93,16 @@ age and stage (n = 503, 113 events, concordance 0.70), CN-high carries a hazard 
 - Counts come from the Xena hub's log2(x+1) STAR counts, back-transformed to integers.
 - No treatment variables: adjuvant therapy is inconsistently recorded in TCGA and is a known
   confounder of stage-specific outcomes.
+- The clinical MSI assay call is missing for a third of the tumors, so the classifier is trained on
+  321; the 3,000-gene variance filter is unsupervised but computed once over all labeled samples
+  rather than inside each fold; and 321 samples against 3,000 features is the regime where the
+  penalty, not the data, decides how many genes survive.
 
 ## Run
 
 ```bash
 conda env create -f environment.yml && conda activate tcga
-./run_all.sh          # downloads ~65 MB once, then runs steps 01–04 (about 1 minute)
+./run_all.sh          # downloads ~65 MB once, then runs steps 01–06 (about 4 minutes)
 ```
 
 Outputs: `results/` (tables), `figures/` (plots).
