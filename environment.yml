@@ -1,0 +1,15 @@
+name: tcga
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - seaborn
+  - statsmodels
+  - pip
+  - pip:
+      - pydeseq2==0.5.4
+      - lifelines==0.30.3
+      - gseapy==1.3.2
