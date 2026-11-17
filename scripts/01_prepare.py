@@ -26,7 +26,8 @@ sub["subtype"] = sub.Subtype_Selected.str.replace("UCEC.", "", regex=False)
 sub = sub[sub.subtype != "NA"]
 sub["patient"] = sub.sampleID.str[:12]
 sub = sub[sub.sampleID.str[13:15] == "01"]  # primary tumor only
-sub = sub[["patient", "subtype"]].drop_duplicates("patient")
+sub = sub[["patient", "subtype", "Subtype_other"]].rename(columns={"Subtype_other": "msi_assay"}).drop_duplicates("patient")
+# msi_assay is the clinical MSI call (MSI-H / MSI-L / MSS), independent of the expression-based subtype
 
 # --- Clinical endpoints: TCGA-CDR, the curated resource recommended for survival work ---
 cdr = pd.read_csv(DATA / "Survival_SupplementalTable_S1_20171025_xena_sp", sep="\t")
@@ -67,6 +68,7 @@ keep_samples = sorted(set(counts.columns) & set(cohort.patient))
 counts = counts[keep_samples]
 counts = counts[(counts >= 10).sum(axis=1) >= 0.1 * len(keep_samples)]
 cohort = cohort[cohort.patient.isin(keep_samples)].set_index("patient").loc[keep_samples]
+cohort["tss"] = cohort.index.str[5:7]  # tissue source site, the contributing institution: the batch variable
 
 cohort.to_csv(OUT / "cohort.tsv", sep="\t")
 counts.to_csv(OUT / "counts.tsv.gz", sep="\t", compression="gzip")
